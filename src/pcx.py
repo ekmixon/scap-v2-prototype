@@ -23,7 +23,7 @@ from dxlclient.service import ServiceRegistrationInfo
 from messages import ReportResultsMessage, RegistrationMessage, CollectorRequestMessage
 
 # Import common logging and configuration
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/..")
 from common import *
 
 # Configure local logger
@@ -43,16 +43,22 @@ MODEL = j["model"]
 COLLECTOR_ID = j["register_to"]
 
 # Topic that the PCX listens on for collection requests
-EVENT_PCX_COLLECTOR_REQUEST_TOPIC = "/scap/event/pcx/collector/request/" + PCX_ID
+EVENT_PCX_COLLECTOR_REQUEST_TOPIC = (
+    f"/scap/event/pcx/collector/request/{PCX_ID}"
+)
+
 
 # Topic to send collection requests to PCEs
 SERVICE_PCE_REQUEST_TOPIC = "/scap/service/pce/request"
 
-# Topic that the PCX listens on for PCE registration requests                                                       
-EVENT_PCE_REGISTRATION_TOPIC = "/scap/event/pce/registration/" + PCX_ID
+# Topic that the PCX listens on for PCE registration requests
+EVENT_PCE_REGISTRATION_TOPIC = f"/scap/event/pce/registration/{PCX_ID}"
 
 # Topic that the collector listens on for PCE registration requests
-EVENT_PCE_COLLECTOR_REGISTRATION_TOPIC = "/scap/event/pce/registration/" + COLLECTOR_ID
+EVENT_PCE_COLLECTOR_REGISTRATION_TOPIC = (
+    f"/scap/event/pce/registration/{COLLECTOR_ID}"
+)
+
 
 # Base topic that the PCX uses to send assessment results to an application                                        
 EVENT_ASSESSMENT_RESULTS_TOPIC = "/scap/event/assessment/results"
@@ -83,39 +89,37 @@ with DxlClient(config) as client:
 
         # Get content and perform any content conversions
         # before sending to PCE. If cancellation message                                                          
-        # just send that to the PCE.                                                                                
+        # just send that to the PCE.
         if crm.ids == "":
-            content = "cancel_" + str(crm.transaction_id)
+            content = f"cancel_{str(crm.transaction_id)}"
         else:
             content = get_content(crm.ids)
             content = convert_content(content)
 
-        # Send the collection request to the identified PCE                                                         
-        req = Request(SERVICE_PCE_REQUEST_TOPIC + "/" + pce_id)
+        # Send the collection request to the identified PCE
+        req = Request(f"{SERVICE_PCE_REQUEST_TOPIC}/{pce_id}")
         req.payload = content
         res = client.sync_request(req)
 
-        if res.message_type != Message.MESSAGE_TYPE_ERROR:
-            # Only send results if not a cancel message
-            if crm.ids != "":
-                rrsm = ReportResultsMessage()
-                rrsm.assessment_results = res.payload.decode()
-                rrsm.transaction_id = crm.transaction_id
-                rrsm.requestor_id = crm.requestor_id
-                rrsm.target_id = lookup_target_id(pce_id)
-                rrsm.collector_id = COLLECTOR_ID
-                rrsm.pcx_id = PCX_ID
-                rrsm.pce_id = pce_id
-                rrsm.timestamp = str(datetime.datetime.now())
+        if res.message_type != Message.MESSAGE_TYPE_ERROR and crm.ids != "":
+            rrsm = ReportResultsMessage()
+            rrsm.assessment_results = res.payload.decode()
+            rrsm.transaction_id = crm.transaction_id
+            rrsm.requestor_id = crm.requestor_id
+            rrsm.target_id = lookup_target_id(pce_id)
+            rrsm.collector_id = COLLECTOR_ID
+            rrsm.pcx_id = PCX_ID
+            rrsm.pce_id = pce_id
+            rrsm.timestamp = str(datetime.datetime.now())
 
-                # Apply collection parameters
-                cp_rrsm = apply_collection_parameters(rrsm, crm.collection_parameters)
-                store_data(cp_rrsm)
+            # Apply collection parameters
+            cp_rrsm = apply_collection_parameters(rrsm, crm.collection_parameters)
+            store_data(cp_rrsm)
 
-                # Apply result format and filters and send to the                                                  
-                # appropriate application                                                                    
-                rff_rrsm = apply_format_and_filters(rrsm, crm.result_format_filters)
-                send_collection_results_event(rff_rrsm)
+            # Apply result format and filters and send to the                                                  
+            # appropriate application                                                                    
+            rff_rrsm = apply_format_and_filters(rrsm, crm.result_format_filters)
+            send_collection_results_event(rff_rrsm)
         return
 
     # Check local cache for PCE instructions
@@ -134,10 +138,7 @@ with DxlClient(config) as client:
     # Get all the PCEs associated with a
     # specific target id. 
     def get_pces(target_id):
-        if target_id in pces.keys():
-            return pces[target_id]
-        else:
-            return []
+        return pces[target_id] if target_id in pces.keys() else []
 
     # Get the target id associated
     # with the specified PCE id.
@@ -162,10 +163,7 @@ with DxlClient(config) as client:
     # collection methods property
     def get_pce_ids(collection_methods):
         cms = json.loads(collection_methods)
-        pce_ids = []
-        for cm in cms:
-            pce_ids.append(cm["pce-id"])
-        return pce_ids
+        return [cm["pce-id"] for cm in cms]
 
     # Query the repository for certain information                                                                 
     def query_repository(query):
@@ -190,7 +188,9 @@ with DxlClient(config) as client:
     # Send assessment results event to the appropriate application                                                 
     def send_collection_results_event(rrsm):
         logger.info("Sending report results to application %s : %s", rrsm.requestor_id, rrsm.to_s())
-        send_event(EVENT_ASSESSMENT_RESULTS_TOPIC + "/" + rrsm.requestor_id, rrsm.to_json())
+        send_event(
+            f"{EVENT_ASSESSMENT_RESULTS_TOPIC}/{rrsm.requestor_id}", rrsm.to_json()
+        )
 
     # Store data in the repository
     def store_data(m):

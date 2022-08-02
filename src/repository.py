@@ -23,7 +23,7 @@ from messages import InitiateAssessmentMessage, ReportResultsMessage, QueryMessa
 from messages import RegistrationMessage, MessageType
 
 # Import common logging and configuration
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/..")
 from common import *
 
 # Configure local logger
@@ -45,13 +45,7 @@ app_transactions = {}
 collectors = {}
 
 # Stores all the targets identified on the network based on their operating system
-targets = {}
-targets["windows"] = []
-targets["rhel"] = []
-targets["solaris"] = []
-targets["macos"] = []
-targets["ubuntu"] = []
-
+targets = {"windows": [], "rhel": [], "solaris": [], "macos": [], "ubuntu": []}
 # Stores all the targets identified on the network
 all_targets = []
 
@@ -151,7 +145,7 @@ with DxlClient(config) as client:
     # Process incoming query requests from the manager
     class QueryRequestCallback(RequestCallback):
         def on_request(self, request):
-            
+
             # Parse the query message and execute the query
             # against the repository
             qm = QueryMessage()
@@ -162,7 +156,7 @@ with DxlClient(config) as client:
             response = Response(request)
             qrm = QueryResultMessage(qm.query, results)
             response.payload = (qrm.to_json()).encode()
-            logger.info("Sending query results: " + qrm.to_s())
+            logger.info(f"Sending query results: {qrm.to_s()}")
             client.send_response(response)
 
     # Process incoming storage requests

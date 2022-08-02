@@ -22,7 +22,7 @@ from dxlclient.service import ServiceRegistrationInfo
 from messages import InitiateAssessmentMessage, ReportResultsMessage, RegistrationMessage, CollectorRequestMessage
 
 # Import common logging and configuration
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/..")
 from common import *
 
 # Configure local logger
@@ -45,10 +45,10 @@ SUPPORTED_CHECK_TYPES = json.dumps(j["supported_check_types"])
 REGISTER_TO = j["register_to"]
 
 # Topic that the PCE listens on for collection requests
-SERVICE_PCE_REQUEST_TOPIC = "/scap/service/pce/request/"+PCE_ID
+SERVICE_PCE_REQUEST_TOPIC = f"/scap/service/pce/request/{PCE_ID}"
 
 # Topic that the PCX/collector listens on for PCE registration requests
-EVENT_PCE_REGISTRATION_TOPIC = "/scap/event/pce/registration/" + REGISTER_TO
+EVENT_PCE_REGISTRATION_TOPIC = f"/scap/event/pce/registration/{REGISTER_TO}"
 
 # Create DXL configuration from file
 config = DxlClientConfig.create_dxl_config_from_file(CONFIG)
@@ -61,16 +61,14 @@ with DxlClient(config) as client:
 
     # Perfom the collection on the endpoint and return the results
     def perform_collection(instructions):
-        if instructions == "inventory":
-            assessment_results = SOFTWARE
-        elif instructions == "assess":
-            assessment_results = "pce "+OS+" assessment results ("+PCE_ID+")"
+        if instructions == "assess":
+            return f"pce {OS} assessment results ({PCE_ID})"
+        elif instructions == "inventory":
+            return SOFTWARE
         elif instructions == "remaining_request":
-            assessment_results = "remaining "+OS+" results ("+PCE_ID+")"
+            return f"remaining {OS} results ({PCE_ID})"
         else:
-            assessment_results = "unknown results"
-
-        return assessment_results
+            return "unknown results"
 
     # Process incoming collection requests from the manager                                                         
     class PCERequestCallback(RequestCallback):

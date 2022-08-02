@@ -26,7 +26,7 @@ from dxlclient.service import ServiceRegistrationInfo
 from messages import ReportResultsMessage, MessageType, QueryMessage, QueryResultMessage, RegistrationMessage, CollectorRequestMessage
 
 # Import common logging and configuration
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/..")
 from common import *
 
 # Configure local logger
@@ -59,7 +59,7 @@ SERVICE_REPOSITORY_QUERY_TOPIC = "/scap/service/repository/query"
 EVENT_ASSESSMENT_RESULTS_TOPIC = "/scap/event/assessment/results"
 
 # Topic that the collector listens on for PCE registration requests
-EVENT_PCE_REGISTRATION_TOPIC = "/scap/event/pce/registration/" + COLLECTOR_ID
+EVENT_PCE_REGISTRATION_TOPIC = f"/scap/event/pce/registration/{COLLECTOR_ID}"
 
 # Topic that repository listens for data to store
 EVENT_STORE_DATA_TOPIC = "/scap/event/data/store"
@@ -112,36 +112,34 @@ with DxlClient(config) as client:
         # before sending to PCE. If cancellation message
         # just send that to the PCE.
         if crm.ids == "":
-            content = "cancel_" + str(crm.transaction_id)
+            content = f"cancel_{str(crm.transaction_id)}"
         else:
             content = get_content(crm.ids)
             content = convert_content(content)
 
         # Send the collection request to the identified PCE
-        request = Request(SERVICE_PCE_REQUEST_TOPIC + "/" + pce_id)
+        request = Request(f"{SERVICE_PCE_REQUEST_TOPIC}/{pce_id}")
         request.payload = content.encode()
         response = client.sync_request(request)
 
-        if response.message_type != Message.MESSAGE_TYPE_ERROR:
-            # Only send results if not a cancel message
-            if crm.ids != "":
-                rrsm = ReportResultsMessage()
-                rrsm.assessment_results = response.payload.decode()
-                rrsm.transaction_id = crm.transaction_id
-                rrsm.requestor_id = crm.requestor_id
-                rrsm.target_id = lookup_target_id(pce_id)
-                rrsm.collector_id = COLLECTOR_ID
-                rrsm.pce_id = pce_id
-                rrsm.timestamp = str(datetime.datetime.now())
+        if response.message_type != Message.MESSAGE_TYPE_ERROR and crm.ids != "":
+            rrsm = ReportResultsMessage()
+            rrsm.assessment_results = response.payload.decode()
+            rrsm.transaction_id = crm.transaction_id
+            rrsm.requestor_id = crm.requestor_id
+            rrsm.target_id = lookup_target_id(pce_id)
+            rrsm.collector_id = COLLECTOR_ID
+            rrsm.pce_id = pce_id
+            rrsm.timestamp = str(datetime.datetime.now())
 
-                # Apply collection parameters                                                                       
-                cp_rrsm = apply_collection_parameters(rrsm, crm.collection_parameters)
-                store_data(cp_rrsm)
+            # Apply collection parameters                                                                       
+            cp_rrsm = apply_collection_parameters(rrsm, crm.collection_parameters)
+            store_data(cp_rrsm)
 
-                # Apply result format and filters and send to the
-                # appropriate application                                                                      
-                rff_rrsm = apply_format_and_filters(rrsm, crm.result_format_filters)
-                send_collection_results_event(rff_rrsm)
+            # Apply result format and filters and send to the
+            # appropriate application                                                                      
+            rff_rrsm = apply_format_and_filters(rrsm, crm.result_format_filters)
+            send_collection_results_event(rff_rrsm)
 
         return
 
@@ -155,7 +153,7 @@ with DxlClient(config) as client:
     # Task the PCX with a collection request
     def task_pcx(crm, pcx_id):
         logger.info("Tasking PCX: %s", crm.to_s())
-        send_event(EVENT_PCX_COLLECTOR_REQUEST_TOPIC + "/" + pcx_id, crm.to_json())
+        send_event(f"{EVENT_PCX_COLLECTOR_REQUEST_TOPIC}/{pcx_id}", crm.to_json())
 
     # Check local cache for PCE instructions
     def check_local_cache(ids):
@@ -215,7 +213,9 @@ with DxlClient(config) as client:
     # Send assessment results event to the appropriate application
     def send_collection_results_event(rrsm):
         logger.info("Sending report results to application %s : %s", rrsm.requestor_id, rrsm.to_s())
-        send_event(EVENT_ASSESSMENT_RESULTS_TOPIC + "/" + rrsm.requestor_id, rrsm.to_json())
+        send_event(
+            f"{EVENT_ASSESSMENT_RESULTS_TOPIC}/{rrsm.requestor_id}", rrsm.to_json()
+        )
 
     # Store data in the repository                                                                             
     def store_data(m):
@@ -253,25 +253,7 @@ with DxlClient(config) as client:
             rm.parse(event.payload.decode())
 
             # Check if it is coming from a PCX
-            if rm.pcx_id != "":
-                if rm.target_id in pcx_pces.keys():
-                    if rm.pcx_id not in pcx_pces[rm.target_id]:
-                        pcx_pces[rm.target_id].append(rm.pcx_id)
-                else:
-                    # Add PCX to the list of registered PCXs
-                    # and set the collector properties of the
-                    # registration message
-                    pcx_pces[rm.target_id] = [rm.pcx_id]
-                    rm.collector_id = COLLECTOR_ID
-                    rm.collector_make = make
-                    rm.collector_model = model
-
-                    # Only store in the repository if this target
-                    # wasn't already identified by PCE
-                    if rm.target_id not in pces.keys():
-                        store_data(rm)
-            # Coming from a PCE
-            else:
+            if rm.pcx_id == "":
                 # Generate a target id for the endpoint
                 # based on asset information
                 target_id = get_target_id(rm.asset_info)
@@ -296,6 +278,23 @@ with DxlClient(config) as client:
                     # wasn't already identified by a PCX
                     if rm.target_id not in pcx_pces.keys():
                         store_data(rm)
+
+            elif rm.target_id in pcx_pces.keys():
+                if rm.pcx_id not in pcx_pces[rm.target_id]:
+                    pcx_pces[rm.target_id].append(rm.pcx_id)
+            else:
+                # Add PCX to the list of registered PCXs
+                # and set the collector properties of the
+                # registration message
+                pcx_pces[rm.target_id] = [rm.pcx_id]
+                rm.collector_id = COLLECTOR_ID
+                rm.collector_make = make
+                rm.collector_model = model
+
+                # Only store in the repository if this target
+                # wasn't already identified by PCE
+                if rm.target_id not in pces.keys():
+                    store_data(rm)
 
     # Prepare service registration information
     info = ServiceRegistrationInfo(client, "/scap/collector")

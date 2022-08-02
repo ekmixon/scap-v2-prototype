@@ -39,10 +39,10 @@ SERVICE_CANCEL_ASSESSMENT_TOPIC = "/scap/service/assessment/cancel"
 SERVICE_REPOSITORY_QUERY_TOPIC = "/scap/service/repository/query"
 
 # Topic that this application listens on for assessment results
-EVENT_ASSESSMENT_RESULTS_TOPIC = "/scap/event/assessment/results/" + APP_ID
+EVENT_ASSESSMENT_RESULTS_TOPIC = f"/scap/event/assessment/results/{APP_ID}"
 
 # Import common logging and configuration
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + "/..")
+sys.path.append(f"{os.path.dirname(os.path.abspath(__file__))}/..")
 from common import *
 
 # Configure local logger
